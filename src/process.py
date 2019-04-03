@@ -36,24 +36,24 @@ def create_date_index(df):
 
 def aggregate_data(df):
     """aggregates columns"""
-    df['CHT Avg'] = df[['E1 CHT1', 'E1 CHT2', 'E1 CHT3', 'E1 CHT4']].mean(axis=1)
+    df['CHT'] = df[['E1 CHT1', 'E1 CHT2', 'E1 CHT3', 'E1 CHT4']].mean(axis=1)
     del df['E1 CHT1'], df['E1 CHT2'], df['E1 CHT3'], df['E1 CHT4']
 
-    df['EGT Avg'] = df[['E1 EGT1', 'E1 EGT2', 'E1 EGT3', 'E1 EGT4']].mean(axis=1)
+    df['EGT'] = df[['E1 EGT1', 'E1 EGT2', 'E1 EGT3', 'E1 EGT4']].mean(axis=1)
     del df['E1 EGT1'], df['E1 EGT2'], df['E1 EGT3'], df['E1 EGT4']
 
-    df['Alt Avg'] = df[['AltGPS', 'AltB', 'AltMSL']].mean(axis=1)
+    # This one doesn't work, but the others do
+    df['Alt Avg'] = df[['AltB', 'AltMSL', 'AltGPS']].astype('float').mean(axis=1)
     del df['AltGPS'], df['AltB'], df['AltMSL']
-
 
 
 def delete_data(df):
     """deletes irrelevant data columns and data from startup until AHRS initialized"""
     del df['BaroA'], df['NAV1'], df['NAV2'], df['COM1'], df['COM2'], df['VCDI'], df['HCDI'], df['WptDst'], \
         df['WptBrg'], df['MagVar'], df['AfcsOn'], df['RollM'], df['PitchM'], df['RollC'], df['PichC'], df['GPSfix'], \
-        df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas']
+        df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas'], df['AtvWpt']
 
-    return df[df.Pitch != '']
+    return df[df.Pitch.str.strip() != '']
 
 
 def resample_data(df, minutes):
@@ -69,12 +69,15 @@ def import_files(file_names):
 
         # only accept data greater than 10 minutes
         if temp_df.shape[0] > 600:
-            # remove whitespace from all the column headers
+            # remove whitespace from data and headers
+            data_frame_trimmed = temp_df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+
             new_headers = []
-            for col in temp_df.columns:
+            for col in data_frame_trimmed.columns:
                 new_headers.append(col.strip())
-            temp_df.columns = new_headers
-            data.append(temp_df)
+
+            data_frame_trimmed.columns = new_headers
+            data.append(data_frame_trimmed)
 
     return data
 
@@ -90,7 +93,10 @@ def run():
             create_date_index(each)
             each = delete_data(each)
             aggregate_data(each)
+
             resample_data(each, 5)
+            each.to_csv('data/test.csv')
+
 
 
 if __name__ == '__main__':
