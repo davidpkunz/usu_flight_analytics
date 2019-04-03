@@ -7,6 +7,7 @@ import numpy as np
 import dateutil
 import matplotlib.pyplot as pyplot
 
+
 def get_files(path):
     """returns all file names in the given directory"""
     all_files = []
@@ -33,6 +34,8 @@ def create_date_index(df):
     df.index = dti
     df.index.name = 'datetime'
 
+    return df
+
 
 def aggregate_data(df):
     """aggregates columns"""
@@ -42,8 +45,7 @@ def aggregate_data(df):
     df['EGT'] = df[['E1 EGT1', 'E1 EGT2', 'E1 EGT3', 'E1 EGT4']].mean(axis=1)
     del df['E1 EGT1'], df['E1 EGT2'], df['E1 EGT3'], df['E1 EGT4']
 
-    # This one doesn't work, but the others do
-    df['Alt Avg'] = df[['AltB', 'AltMSL', 'AltGPS']].astype('float').mean(axis=1)
+    df['Altitude'] = df[['AltB', 'AltMSL', 'AltGPS']].mean(axis=1)
     del df['AltGPS'], df['AltB'], df['AltMSL']
 
 
@@ -51,9 +53,9 @@ def delete_data(df):
     """deletes irrelevant data columns and data from startup until AHRS initialized"""
     del df['BaroA'], df['NAV1'], df['NAV2'], df['COM1'], df['COM2'], df['VCDI'], df['HCDI'], df['WptDst'], \
         df['WptBrg'], df['MagVar'], df['AfcsOn'], df['RollM'], df['PitchM'], df['RollC'], df['PichC'], df['GPSfix'], \
-        df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas'], df['AtvWpt']
+        df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas'], df['AtvWpt'], df['HSIS']
 
-    return df[df.Pitch.str.strip() != '']
+    return df[pd.notna(df.Pitch)]
 
 
 def resample_data(df, minutes):
@@ -65,19 +67,11 @@ def import_files(file_names):
     """Returns all file objects after minor processing"""
     data = []
     for name in file_names:
-        temp_df = pd.read_csv(name, header=2)
+        temp_df = pd.read_csv(name, header=2, skipinitialspace=True)
 
         # only accept data greater than 10 minutes
         if temp_df.shape[0] > 600:
-            # remove whitespace from data and headers
-            data_frame_trimmed = temp_df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-
-            new_headers = []
-            for col in data_frame_trimmed.columns:
-                new_headers.append(col.strip())
-
-            data_frame_trimmed.columns = new_headers
-            data.append(data_frame_trimmed)
+            data.append(temp_df)
 
     return data
 
@@ -90,13 +84,13 @@ def run():
         path = sys.argv[1]
         data = import_files(get_files(path))
         for each in data:
-            create_date_index(each)
+            each = create_date_index(each)
             each = delete_data(each)
+            each.fillna(0, inplace=True)
             aggregate_data(each)
+            # each.resample('3T')
 
-            resample_data(each, 5)
             each.to_csv('data/test.csv')
-
 
 
 if __name__ == '__main__':
