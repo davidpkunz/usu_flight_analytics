@@ -3,9 +3,8 @@
 import os
 import sys
 import pandas as pd
-import numpy as np
 import dateutil
-import matplotlib.pyplot as pyplot
+
 
 
 def get_files(path):
@@ -24,10 +23,17 @@ def get_files(path):
 def create_date_index(df):
     """takes the seperated data, time, utc offset columns and combines them into one and sets as the index"""
     date_time_list = []
+    flag = True
     for row in df[['Lcl Date', 'Lcl Time', 'UTCOfst']].iterrows():
-        date_time = row[1]['Lcl Date'] + 'T' + row[1]['Lcl Time'].strip() + row[1]['UTCOfst'].strip()
-        # ISO 8601 "%Y-%m-%dT%H:%M:%S%z"
-        date_time_list.append(dateutil.parser.parse(date_time))
+
+        print(row[1])
+        flag = False
+        if pd.notna(row[1]['Lcl Date']):
+            date_time = row[1]['Lcl Date'] + 'T' + row[1]['Lcl Time'] + row[1]['UTCOfst']
+            # ISO 8601 "%Y-%m-%dT%H:%M:%S%z"
+            date_time_list.append(dateutil.parser.parse(date_time))
+        else:
+            df = df[pd.notna(df['Lcl Date'])]
 
     dti = pd.to_datetime(date_time_list)
     del df['Lcl Date'], df['Lcl Time'], df['UTCOfst']
@@ -51,24 +57,26 @@ def aggregate_data(df):
 
 def delete_data(df):
     """deletes irrelevant data columns and data from startup until AHRS initialized"""
-    del df['BaroA'], df['NAV1'], df['NAV2'], df['COM1'], df['COM2'], df['VCDI'], df['HCDI'], df['WptDst'], \
-        df['WptBrg'], df['MagVar'], df['AfcsOn'], df['RollM'], df['PitchM'], df['RollC'], df['PichC'], df['GPSfix'], \
-        df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas'], df['AtvWpt'], df['HSIS']
+    # del df['BaroA'], df['NAV1'], df['NAV2'], df['COM1'], df['COM2'], df['VCDI'], df['HCDI'], df['WptDst'], \
+    #    df['WptBrg'], df['MagVar'], df['AfcsOn'], df['RollM'], df['PitchM'], df['RollC'], df['PichC'], df['GPSfix'], \
+    #    df['HAL'], df['VAL'], df['HPLwas'], df['HPLfd'], df['VPLwas'], df['AtvWpt'], df['HSIS']
 
     return df[pd.notna(df.Pitch)]
 
 
 def resample_data(df, minutes):
     """Resamples the data to the given minute interval"""
-    df.resample(str(minutes) + 'Min')
+    return df.resample(str(minutes) + 'Min').mean()
 
 
 def import_files(file_names):
     """Returns all file objects after minor processing"""
     data = []
     for name in file_names:
-        temp_df = pd.read_csv(name, header=2, skipinitialspace=True)
-
+        print(name)
+        temp_df = pd.read_csv(name, header=2, skipinitialspace=True, index_col=False, engine='python', skipfooter=1, usecols=[
+              0,1,2,4,5,6,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,44,45
+        ])
         # only accept data greater than 10 minutes
         if temp_df.shape[0] > 600:
             data.append(temp_df)
@@ -82,15 +90,19 @@ def run():
         sys.exit(1)
     else:
         path = sys.argv[1]
-        data = import_files(get_files(path))
-        for each in data:
+        raw_data = import_files(get_files(path))
+        final_data = []
+
+        for each in raw_data:
             each = create_date_index(each)
             each = delete_data(each)
             each.fillna(0, inplace=True)
             aggregate_data(each)
-            # each.resample('3T')
+            # each = resample_data(each, 1)
+            final_data.append(each)
+            each.to_csv('data/test/output.csv')
 
-            each.to_csv('data/test.csv')
+        print(len(final_data))
 
 
 if __name__ == '__main__':
